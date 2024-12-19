@@ -101,13 +101,14 @@ def main():
     # Remove '.' and replace ',' with '.' for proper float conversion
     numeric_columns = ['Permanent', 'Area']
     for col in numeric_columns:
+        # Replace '.' with '' and ',' with '.' and convert to float
         df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
 
-    # Handle categorical columns if necessary
-    # For 'Urbanization' and 'Permanent', ensure they are categorical
+    # Handle categorical columns and convert to appropriate types
+    # Use 'Int64' for nullable integers
     df['Urbanization'] = pd.to_numeric(df['Urbanization'], errors='coerce').astype('Int64')
-    df['Mountainous'] = df['Mountainous'].astype(str)
     df['Permanent'] = pd.to_numeric(df['Permanent'], errors='coerce').astype('Int64')
+    df['Mountainous'] = df['Mountainous'].astype(str)
 
     # Check if 'NUTS_ID' exists in GeoDataFrame
     if 'NUTS_ID' not in greece_nuts3_gdf.columns:
@@ -121,6 +122,7 @@ def main():
     missing_data = merged_gdf[merged_gdf['Description'].isna()]
     if not missing_data.empty:
         st.warning("Some regions in the shapefile do not have corresponding data in the Excel file.")
+        st.dataframe(missing_data[['NUTS_ID', 'NUTS_NAME']])
 
     # Choose the column for choropleth
     choropleth_options = {
@@ -244,6 +246,8 @@ def main():
                 <ul style="list-style-type: none; padding: 0;">
             """
             for key, label in legend_dict.items():
+                # Handle 'nan' and 'NaN' representations
+                display_key = key if key != 'nan' else 'NaN'
                 legend_html += f'<li><span style="background-color: {color_mapping.get(key, "lightgray")}; padding: 5px; margin-right: 10px; display: inline-block;"></span>{label}</li>'
             legend_html += """
                 </ul>
