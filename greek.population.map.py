@@ -75,7 +75,6 @@ def main():
     st.write(df.columns.tolist())
 
     # Rename columns for easier handling
-    # Adjust the column names based on actual headers
     df = df.rename(columns={
         "Γεωγραφικός Κωδικός (NUTS1+NUTS2+10ψήφιος)": "GEO_CODE",
         "Περιγραφή": "Description",
@@ -102,13 +101,13 @@ def main():
     # Remove '.' and replace ',' with '.' for proper float conversion
     numeric_columns = ['Permanent', 'Area']
     for col in numeric_columns:
-        df[col] = df[col].astype(str).str.replace('.', '').str.replace(',', '.').astype(float)
+        df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
 
     # Handle categorical columns if necessary
     # For 'Urbanization' and 'Permanent', ensure they are categorical
-    df['Urbanization'] = df['Urbanization'].astype(int).astype(str)
+    df['Urbanization'] = pd.to_numeric(df['Urbanization'], errors='coerce').astype('Int64')
     df['Mountainous'] = df['Mountainous'].astype(str)
-    df['Permanent'] = df['Permanent'].astype(int).astype(str)
+    df['Permanent'] = pd.to_numeric(df['Permanent'], errors='coerce').astype('Int64')
 
     # Check if 'NUTS_ID' exists in GeoDataFrame
     if 'NUTS_ID' not in greece_nuts3_gdf.columns:
@@ -141,20 +140,20 @@ def main():
 
     # Handle categorical data if necessary
     if choropleth_column in ["Urbanization", "Mountainous", "Permanent"]:
-        # Define a color mapping
+        # Define a color mapping, including a default for missing data
         if choropleth_column == "Urbanization":
-            color_mapping = {"1": "blue", "2": "green"}
-            legend_dict = {"1": "Urban", "2": "Rural"}
+            color_mapping = {"1": "blue", "2": "green", "NaN": "lightgray"}
+            legend_dict = {"1": "Urban", "2": "Rural", "NaN": "No Data"}
         elif choropleth_column == "Mountainous":
-            color_mapping = {"Π": "yellow", "Η": "orange", "Ο": "red"}
-            legend_dict = {"Π": "Plain", "Η": "Semi-mountainous", "Ο": "Mountainous"}
+            color_mapping = {"Π": "yellow", "Η": "orange", "Ο": "red", "nan": "lightgray"}
+            legend_dict = {"Π": "Plain", "Η": "Semi-mountainous", "Ο": "Mountainous", "nan": "No Data"}
         elif choropleth_column == "Permanent":
             # Assuming 'Permanent' is binary: 1=Permanent, 0=Non-Permanent
-            color_mapping = {"1": "purple", "0": "gray"}
-            legend_dict = {"1": "Permanent", "0": "Non-Permanent"}
+            color_mapping = {"1": "purple", "0": "gray", "NaN": "lightgray"}
+            legend_dict = {"1": "Permanent", "0": "Non-Permanent", "NaN": "No Data"}
 
-        # Apply color mapping to the GeoDataFrame
-        merged_gdf['color'] = merged_gdf[choropleth_column].map(color_mapping)
+        # Map colors, handling NaN values
+        merged_gdf['color'] = merged_gdf[choropleth_column].astype(str).map(color_mapping).fillna('lightgray')
     else:
         # For numerical data like 'Area'
         color_mapping = None  # Let folium choose the color scale
@@ -233,7 +232,7 @@ def main():
                 position: fixed;
                 bottom: 10px;
                 left: 10px;
-                width: 200px;
+                width: 220px;
                 background-color: white;
                 border: 2px solid black;
                 padding: 10px;
