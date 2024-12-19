@@ -10,7 +10,7 @@ import os
 shapefile_path = "NUTS_RG_60M_2024_3035.shp"
 
 # Path to your Excel file
-excel_path = "A1602_SAM08_TB_DC_00_2021_01_F_GR.xls"  # <-- Update this path
+excel_path = "A1602_SAM08_TB_DC_00_2021_01_F_GR.xls"  # Update this path as needed
 
 def main():
     # Title and Introduction
@@ -46,9 +46,21 @@ def main():
     st.subheader("Shapefile Data Preview")
     st.dataframe(greece_nuts3_gdf.head())
 
-    # Load the Excel data
+    # Determine the engine based on file extension
+    file_extension = os.path.splitext(excel_path)[1].lower()
+    
+    if file_extension == '.xlsx':
+        engine = 'openpyxl'
+    elif file_extension == '.xls':
+        engine = 'xlrd'
+    else:
+        st.error("Unsupported file format. Please upload an .xls or .xlsx file.")
+        return
+
+    # Load the Excel data with the appropriate engine and correct header
     try:
-        df = pd.read_excel(excel_path)
+        # Specify header=2 to skip the first two rows (titles/merged cells)
+        df = pd.read_excel(excel_path, engine=engine, header=2)
         st.success("Excel data loaded successfully!")
     except Exception as e:
         st.error(f"Failed to load the Excel file: {e}")
@@ -58,7 +70,12 @@ def main():
     st.subheader("Excel Data Preview")
     st.dataframe(df.head())
 
+    # Display actual column names to verify
+    st.subheader("Excel Data Columns")
+    st.write(df.columns.tolist())
+
     # Rename columns for easier handling
+    # Adjust the column names based on actual headers
     df = df.rename(columns={
         "Γεωγραφικός Κωδικός (NUTS1+NUTS2+10ψήφιος)": "GEO_CODE",
         "Περιγραφή": "Description",
@@ -70,9 +87,28 @@ def main():
 
     # Check if the required columns exist after renaming
     required_columns = ["GEO_CODE", "Description", "Permanent", "Urbanization", "Mountainous", "Area"]
-    if not all(col in df.columns for col in required_columns):
-        st.error(f"Excel file is missing one or more required columns: {required_columns}")
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        st.error(f"Excel file is missing one or more required columns: {missing_columns}")
         return
+    else:
+        st.success("All required columns are present in the Excel data.")
+
+    # Convert 'GEO_CODE' to string to ensure proper merging
+    df['GEO_CODE'] = df['GEO_CODE'].astype(str)
+
+    # Handle number formats (replace '.' and ',' accordingly)
+    # Assuming that '.' is thousands separator and ',' is decimal separator
+    # Remove '.' and replace ',' with '.' for proper float conversion
+    numeric_columns = ['Permanent', 'Area']
+    for col in numeric_columns:
+        df[col] = df[col].astype(str).str.replace('.', '').str.replace(',', '.').astype(float)
+
+    # Handle categorical columns if necessary
+    # For 'Urbanization' and 'Permanent', ensure they are categorical
+    df['Urbanization'] = df['Urbanization'].astype(int).astype(str)
+    df['Mountainous'] = df['Mountainous'].astype(str)
+    df['Permanent'] = df['Permanent'].astype(int).astype(str)
 
     # Check if 'NUTS_ID' exists in GeoDataFrame
     if 'NUTS_ID' not in greece_nuts3_gdf.columns:
@@ -105,8 +141,6 @@ def main():
 
     # Handle categorical data if necessary
     if choropleth_column in ["Urbanization", "Mountainous", "Permanent"]:
-        # Convert categorical data to strings for display
-        merged_gdf[choropleth_column] = merged_gdf[choropleth_column].astype(str)
         # Define a color mapping
         if choropleth_column == "Urbanization":
             color_mapping = {"1": "blue", "2": "green"}
@@ -118,6 +152,9 @@ def main():
             # Assuming 'Permanent' is binary: 1=Permanent, 0=Non-Permanent
             color_mapping = {"1": "purple", "0": "gray"}
             legend_dict = {"1": "Permanent", "0": "Non-Permanent"}
+
+        # Apply color mapping to the GeoDataFrame
+        merged_gdf['color'] = merged_gdf[choropleth_column].map(color_mapping)
     else:
         # For numerical data like 'Area'
         color_mapping = None  # Let folium choose the color scale
@@ -138,9 +175,8 @@ def main():
         if color_mapping:
             # For categorical data
             def style_function(feature):
-                value = feature['properties'].get(choropleth_column, None)
                 return {
-                    'fillColor': color_mapping.get(value, 'lightgray'),
+                    'fillColor': feature['properties'].get('color', 'lightgray'),
                     'color': 'black',
                     'weight': 1,
                     'fillOpacity': 0.7,
@@ -209,7 +245,7 @@ def main():
                 <ul style="list-style-type: none; padding: 0;">
             """
             for key, label in legend_dict.items():
-                legend_html += f'<li><span style="background-color: {color_mapping[key]}; padding: 5px; margin-right: 10px; display: inline-block;"></span>{label}</li>'
+                legend_html += f'<li><span style="background-color: {color_mapping.get(key, "lightgray")}; padding: 5px; margin-right: 10px; display: inline-block;"></span>{label}</li>'
             legend_html += """
                 </ul>
                 <button id="close-legend" style="margin-top: 10px;">Close</button>
@@ -245,8 +281,8 @@ def main():
         # Add marker clustering for centroids
         marker_cluster = MarkerCluster()
         for _, row in merged_gdf.iterrows():
-            if row.geometry.is_empty:
-                continue  # Skip if geometry is empty
+            if row.geometry.is_empty or pd.isna(row.geometry):
+                continue  # Skip if geometry is empty or NaN
             centroid = row.geometry.centroid
             folium.Marker(
                 location=[centroid.y, centroid.x],
