@@ -105,7 +105,7 @@ def main():
         df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
 
     # Handle categorical columns and convert to appropriate types
-    # Use 'Int64' for nullable integers
+    # Use 'Int64' for nullable integers to allow NaN values
     df['Urbanization'] = pd.to_numeric(df['Urbanization'], errors='coerce').astype('Int64')
     df['Permanent'] = pd.to_numeric(df['Permanent'], errors='coerce').astype('Int64')
     df['Mountainous'] = df['Mountainous'].astype(str)
@@ -147,8 +147,8 @@ def main():
             color_mapping = {"1": "blue", "2": "green", "NaN": "lightgray"}
             legend_dict = {"1": "Urban", "2": "Rural", "NaN": "No Data"}
         elif choropleth_column == "Mountainous":
-            color_mapping = {"Π": "yellow", "Η": "orange", "Ο": "red", "nan": "lightgray"}
-            legend_dict = {"Π": "Plain", "Η": "Semi-mountainous", "Ο": "Mountainous", "nan": "No Data"}
+            color_mapping = {"Π": "yellow", "Η": "orange", "Ο": "red", "NaN": "lightgray"}
+            legend_dict = {"Π": "Plain", "Η": "Semi-mountainous", "Ο": "Mountainous", "NaN": "No Data"}
         elif choropleth_column == "Permanent":
             # Assuming 'Permanent' is binary: 1=Permanent, 0=Non-Permanent
             color_mapping = {"1": "purple", "0": "gray", "NaN": "lightgray"}
