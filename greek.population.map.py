@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit as st
 import geopandas as gpd
 import folium
 from folium.plugins import MarkerCluster
@@ -6,7 +7,6 @@ from streamlit.components.v1 import html
 
 # Path to the shapefile
 shapefile_path = "NUTS_RG_60M_2024_3035.shp"
-
 
 def main():
     # Title and Introduction
