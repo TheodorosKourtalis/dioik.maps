@@ -6,7 +6,7 @@ from folium.plugins import MarkerCluster
 from streamlit.components.v1 import html
 
 # Path to the shapefile
-shapefile_path = "NUTS_RG_60M_2024_3035.shp"
+shapefile_path = "NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"
 
 def main():
     # Title and Introduction
