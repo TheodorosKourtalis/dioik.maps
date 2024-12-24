@@ -37,7 +37,7 @@ st.markdown(EXTRA_CSS, unsafe_allow_html=True)  # Inject the subtle style tweaks
 # 3) Config Paths & Columns
 ###############################################################################
 SHAPEFILE_PATH = "/Users/thodoreskourtales/streamlit.dioik/NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"
-EXCEL_FOLDER   = "/Users/thodoreskourtales/streamlit.dioik/output_nuts3_excels/"
+EXCEL_FOLDER   = "NUTS_RG_01M_2024_3035.shp"
 
 SHAPEFILE_KEY  = "NUTS_ID"
 EXCEL_KEY      = "NUTS_ID"
