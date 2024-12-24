@@ -120,7 +120,8 @@ except Exception as e:
 
 try:
     df_all = load_all_excels(EXCEL_FOLDER)
-   
+    st.success("Please use the sidebar to filter the data as you please")
+
 except Exception as e:
     st.error(f"❌ Error loading Excel data: {e}")
     st.stop()
