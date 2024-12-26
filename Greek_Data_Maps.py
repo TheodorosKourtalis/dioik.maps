@@ -69,6 +69,7 @@ translations = {
         "tooltip_region": "Region",
         "bar_chart_title": "NUTS3 Bar Chart - Year={year}, Sex={sex}, Age={age}",
         "color_scale_title": "Value",
+        "sex_unknown": "Unknown",  # Added for unexpected categories
     },
     "el": {  # Greek translations
         "language_selector": "Επιλέξτε Γλώσσα / Select Language",
@@ -103,6 +104,7 @@ translations = {
         "tooltip_region": "Περιοχή",
         "bar_chart_title": "Διάγραμμα Μπάρων NUTS3 - Έτος={year}, Φύλο={sex}, Ηλικία={age}",
         "color_scale_title": "Τιμή",
+        "sex_unknown": "Άγνωστο",  # Added for unexpected categories
     }
 }
 
@@ -130,8 +132,8 @@ def tr(key, **kwargs):
 ###############################################################################
 # 5) Config Paths & Columns
 ###############################################################################
-SHAPEFILE_PATH = "NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"
-EXCEL_FOLDER   = "output_nuts3_excels"
+SHAPEFILE_PATH = "NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"  # Update this path as needed
+EXCEL_FOLDER   = "output_nuts3_excels"  # Update this path as needed
 
 SHAPEFILE_KEY  = "NUTS_ID"
 EXCEL_KEY      = "NUTS_ID"
@@ -171,6 +173,9 @@ def combine_nuts_names(row):
 def load_shapefile(shp_path):
     gdf_all = gpd.read_file(shp_path)
     
+    # Debug: Display shapefile columns
+    st.write("Shapefile Columns:", gdf_all.columns.tolist())
+    
     if NUTS_LEVEL_COL not in gdf_all.columns:
         raise ValueError(tr("error_loading_shapefile", error=f"Shapefile missing '{NUTS_LEVEL_COL}' column."))
     
@@ -191,6 +196,10 @@ def load_shapefile(shp_path):
     
     # Create 'hover_name' column within gdf_nuts3
     gdf_nuts3["hover_name"] = gdf_nuts3.apply(combine_nuts_names, axis=1)
+    
+    # Debug: Display 'hover_name' creation
+    st.write("gdf_nuts3 with 'hover_name':")
+    st.write(gdf_nuts3[['NUTS_ID', 'hover_name']].head())
     
     return gdf_nuts3
 
@@ -222,6 +231,11 @@ def load_all_excels(folder_path):
     
     # Make sure 'VALUE' is numeric
     df_combined[VALUE_COL] = pd.to_numeric(df_combined[VALUE_COL], errors="coerce")
+    
+    # Debug: Display combined DataFrame columns
+    st.write("Combined Excel Data Columns:", df_combined.columns.tolist())
+    st.write("Combined Excel Data Sample:")
+    st.write(df_combined.head())
     
     return df_combined
 
@@ -308,6 +322,10 @@ df_filtered = df_all[
     (df_all[AGE_COL] == selected_age)
 ]
 
+# Debug: Display filtered data
+st.write("Filtered Data Sample:")
+st.write(df_filtered.head())
+
 ###############################################################################
 # 10) Merge with Shapefile
 ###############################################################################
@@ -318,12 +336,19 @@ merged_gdf = gdf_nuts3.merge(
     right_on=EXCEL_KEY
 )
 
+# Debug: Display merged_gdf
+st.write("merged_gdf for Choropleth Map:")
+st.write(merged_gdf[['NUTS_ID', 'hover_name', 'VALUE']].head())
+
 ###############################################################################
-# 11) Combine NUTS Level Names for Hover
+# 11) Prepare Choropleth Map Data
 ###############################################################################
-# 'hover_name' is already created in gdf_nuts3 during load_shapefile
 # Prepare 'custom_data' for choropleth map
 merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
+
+# Debug: Display custom_data
+st.write("Choropleth Map Custom Data:")
+st.write(merged_gdf[['NUTS_ID', 'custom_data']].head())
 
 ###############################################################################
 # 12) Choropleth Map
@@ -410,8 +435,16 @@ df_bar = df_bar.merge(
     how="left"
 )
 
+# Debug: Display df_bar after merge
+st.write("df_bar after merging with 'hover_name':")
+st.write(df_bar[['NUTS_ID', 'hover_name', 'VALUE']].head())
+
 # Prepare 'custom_data' for hovertemplate
 df_bar["custom_data"] = df_bar.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
+
+# Debug: Display custom_data in df_bar
+st.write("Bar Chart Custom Data:")
+st.write(df_bar[['NUTS_ID', 'custom_data']].head())
 
 # Translate sex for title
 translated_sex_title = tr("sex_female") if selected_sex == "F" else tr("sex_male") if selected_sex == "M" else tr("sex_total")
