@@ -38,6 +38,9 @@ st.markdown(EXTRA_CSS, unsafe_allow_html=True)  # Inject the subtle style tweaks
 ###############################################################################
 translations = {
     "en": {
+        "language_selector": "Select Language / Επιλέξτε Γλώσσα",
+        "english": "English",
+        "greek": "Ελληνικά",
         "header": "Greek Data Maps (NUTS3)",
         "filters": "Filters",
         "select_year": "Select Year",
@@ -57,15 +60,26 @@ translations = {
         "success_message": "Please use the sidebar to filter the data as you please",
         "no_excel_files": "⚠️ No .xlsx files found in folder: {}",
         "failed_read_excel": "⚠️ Failed to read {}: {}",
+        "value": "Value",
+        "sex_female": "Female",
+        "sex_male": "Male",
+        "region": "Region (NUTS3)",
+        "tooltip_value": "Value",
+        "tooltip_region": "Region",
+        "bar_chart_title": "NUTS3 Bar Chart - Year={year}, Sex={sex}, Age={age}",
+        "color_scale_title": "Value",
     },
     "el": {  # Greek translations
+        "language_selector": "Επιλέξτε Γλώσσα / Select Language",
+        "english": "English",
+        "greek": "Ελληνικά",
         "header": "Χάρτες Δεδομένων Ελλάδας (NUTS3)",
         "filters": "Φίλτρα",
         "select_year": "Επιλέξτε Έτος",
         "select_sex": "Επιλέξτε Φύλο",
         "select_age": "Επιλέξτε Ομάδα Ηλικίας",
         "select_color_scale": "Επιλέξτε Κλίμακα Χρωμάτων",
-        "choropleth_map": "Χρωματική Χάρτης",
+        "choropleth_map": "Χρωματικός Χάρτης",
         "bar_chart": "Διάγραμμα Μπάρων (Περιοχές NUTS3)",
         "footer": """
         <hr/>
@@ -78,6 +92,14 @@ translations = {
         "success_message": "Παρακαλώ χρησιμοποιήστε τη γραβάτα για να φιλτράρετε τα δεδομένα όπως επιθυμείτε",
         "no_excel_files": "⚠️ Δεν βρέθηκαν αρχεία .xlsx στον φάκελο: {}",
         "failed_read_excel": "⚠️ Αποτυχία ανάγνωσης του {}: {}",
+        "value": "Τιμή",
+        "sex_female": "Θηλυκό",
+        "sex_male": "Αρσενικό",
+        "region": "Περιοχή (NUTS3)",
+        "tooltip_value": "Τιμή",
+        "tooltip_region": "Περιοχή",
+        "bar_chart_title": "Διάγραμμα Μπάρων NUTS3 - Έτος={year}, Φύλο={sex}, Ηλικία={age}",
+        "color_scale_title": "Τιμή",
     }
 }
 
@@ -86,19 +108,20 @@ translations = {
 ###############################################################################
 # Add language selector in the sidebar
 language = st.sidebar.selectbox(
-    "Select Language / Επιλέξτε Γλώσσα",
-    options=["English", "Ελληνικά"],
-    index=0
+    "",
+    options=[translations["en"]["english"], translations["el"]["greek"]],
+    index=0,
+    key="language_selector"
 )
 
 # Map selection to language code
-lang_code = "en" if language == "English" else "el"
+lang_code = "en" if language == translations["en"]["english"] else "el"
 
 # Function to retrieve translated text
-def tr(key, *args):
+def tr(key, **kwargs):
     text = translations[lang_code].get(key, "")
-    if args:
-        return text.format(*args)
+    if kwargs:
+        return text.format(**kwargs)
     return text
 
 ###############################################################################
@@ -124,7 +147,7 @@ NUTS3_LEVEL    = 3
 def load_shapefile(shp_path):
     gdf_all = gpd.read_file(shp_path)
     if NUTS_LEVEL_COL not in gdf_all.columns:
-        raise ValueError(tr("error_loading_shapefile", f"Shapefile missing '{NUTS_LEVEL_COL}' column."))
+        raise ValueError(tr("error_loading_shapefile", error=f"Shapefile missing '{NUTS_LEVEL_COL}' column."))
 
     # Reproject if needed
     if gdf_all.crs and gdf_all.crs.to_epsg() != 4326:
@@ -139,7 +162,7 @@ def load_shapefile(shp_path):
     )
 
     if SHAPEFILE_KEY not in gdf_nuts3.columns:
-        raise ValueError(tr("error_loading_shapefile", f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column."))
+        raise ValueError(tr("error_loading_shapefile", error=f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column."))
 
     return gdf_nuts3
 
@@ -147,7 +170,7 @@ def load_shapefile(shp_path):
 def load_all_excels(folder_path):
     all_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".xlsx")]
     if not all_files:
-        raise FileNotFoundError(tr("no_excel_files", folder_path))
+        raise FileNotFoundError(tr("no_excel_files", folder_path=folder_path))
 
     df_list = []
     for fname in all_files:
@@ -157,17 +180,17 @@ def load_all_excels(folder_path):
             df_temp = pd.read_excel(fpath, engine="openpyxl")
             df_list.append(df_temp)
         except Exception as e:
-            st.warning(tr("failed_read_excel", fname, e))
+            st.warning(tr("failed_read_excel", file=fname, error=e))
 
     if not df_list:
-        raise ValueError(tr("error_loading_excel", "No valid Excel files were loaded."))
+        raise ValueError(tr("error_loading_excel", error="No valid Excel files were loaded."))
 
     df_combined = pd.concat(df_list, ignore_index=True)
 
     # Basic checks
     for col in [EXCEL_KEY, YEAR_COL, SEX_COL, VALUE_COL]:
         if col not in df_combined.columns:
-            raise ValueError(tr("error_loading_excel", f"Combined DataFrame missing column '{col}'."))
+            raise ValueError(tr("error_loading_excel", error=f"Combined DataFrame missing column '{col}'."))
 
     # Make sure 'VALUE' is numeric
     df_combined[VALUE_COL] = pd.to_numeric(df_combined[VALUE_COL], errors="coerce")
@@ -183,7 +206,7 @@ try:
     gdf_nuts3 = load_shapefile(SHAPEFILE_PATH)
    
 except Exception as e:
-    st.error(tr("error_loading_shapefile", e))
+    st.error(tr("error_loading_shapefile", error=e))
     st.stop()
 
 try:
@@ -191,7 +214,7 @@ try:
     st.success(tr("success_message"))
 
 except Exception as e:
-    st.error(tr("error_loading_excel", e))
+    st.error(tr("error_loading_excel", error=e))
     st.stop()
 
 ###############################################################################
@@ -213,11 +236,17 @@ selected_year = st.sidebar.slider(
 )
 
 # 8.2) Sex Dropdown
+# Assuming the 'SEX' column has values like 'F' and 'M'
 sexes_available = sorted(df_all[SEX_COL].dropna().unique())
-selected_sex = st.sidebar.selectbox(tr("select_sex"), options=sexes_available)
+# Translate sex options
+translated_sexes = [tr("sex_female") if sex == "F" else tr("sex_male") for sex in sexes_available]
+sex_mapping = dict(zip(translated_sexes, sexes_available))  # Displayed: Actual value
+selected_sex_display = st.sidebar.selectbox(tr("select_sex"), options=translated_sexes)
+selected_sex = sex_mapping[selected_sex_display]
 
 # 8.3) Age Group Dropdown
 ages_available = sorted(df_all[AGE_COL].dropna().unique())
+# If age groups need translation, handle here. Assuming age groups are numerical or standardized strings.
 selected_age = st.sidebar.selectbox(tr("select_age"), options=ages_available)
 
 # **Add** a color scale selection for variety
@@ -236,7 +265,6 @@ df_filtered = df_all[
     (df_all[SEX_COL] == selected_sex) &
     (df_all[AGE_COL] == selected_age)
 ]
-
 
 ###############################################################################
 # 10) Merge with Shapefile
@@ -305,7 +333,7 @@ fig_map = px.choropleth_mapbox(
     zoom=6,
     hover_name="hover_name",
     hover_data={
-        VALUE_COL: True,
+        VALUE_COL: tr("tooltip_value"),
         SHAPEFILE_KEY: False
     }
 )
@@ -314,7 +342,7 @@ fig_map.update_layout(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
     coloraxis_colorbar=dict(
-        title=VALUE_COL,
+        title=tr("color_scale_title"),
         orientation="h",
         yanchor="bottom",
         xanchor="left",
@@ -345,8 +373,11 @@ fig_bar = px.bar(
     color=VALUE_COL,
     color_continuous_scale=selected_color_scale,  # from sidebar
     range_color=(val_min, val_max),
-    labels={EXCEL_KEY: tr("select_age"), VALUE_COL: "Value"},  # Adjust labels if needed
-    title=f"NUTS3 Bar Chart - Year={selected_year}, Sex={selected_sex}, Age={selected_age}"
+    labels={
+        EXCEL_KEY: tr("region"),
+        VALUE_COL: tr("value")
+    },
+    title=tr("bar_chart_title", year=selected_year, sex=tr("sex_female") if selected_sex == "F" else tr("sex_male"), age=selected_age)
 )
 fig_bar.update_layout(
     xaxis={"categoryorder": "total descending"},
@@ -354,6 +385,7 @@ fig_bar.update_layout(
     plot_bgcolor="rgba(0,0,0,0)",
     margin=dict(r=20, t=80, l=0, b=0),
     coloraxis_colorbar=dict(
+        title=tr("color_scale_title"),
         orientation="v",
         thickness=15,
         len=0.4
