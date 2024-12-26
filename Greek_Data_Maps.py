@@ -38,7 +38,7 @@ st.markdown(EXTRA_CSS, unsafe_allow_html=True)  # Inject the subtle style tweaks
 ###############################################################################
 translations = {
     "en": {
-        "header": "Greek Data Map (NUTS3)",
+        "header": "Greek Data Maps (NUTS3)",
         "filters": "Filters",
         "select_year": "Select Year",
         "select_sex": "Select Sex",
