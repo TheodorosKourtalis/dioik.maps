@@ -40,7 +40,7 @@ translations = {
         "language_selector": "Select Language / Επιλέξτε Γλώσσα",
         "english": "English",
         "greek": "Ελληνικά",
-        "header": "Greek Data Maps (NUTS3)",
+        "header": "Greek Data Maps (NUTS)",
         "filters": "Filters",
         "select_year": "Select Year",
         "select_sex": "Select Sex",
