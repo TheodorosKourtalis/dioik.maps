@@ -320,6 +320,9 @@ def combine_nuts_names(row):
 # Create 'hover_name' column
 merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names, axis=1)
 
+# Prepare 'custom_data' for hovertemplate
+merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
+
 ###############################################################################
 # 12) Choropleth Map
 ###############################################################################
@@ -338,7 +341,7 @@ elif (val_max - val_min) < 1e-3:
     val_min = mid - 0.5
     val_max = mid + 0.5
 
-# Create labels mapping for plotly
+# Create labels mapping for Plotly
 labels_map = {
     VALUE_COL: tr("value_label"),
     SHAPEFILE_KEY: tr("region"),
@@ -354,23 +357,20 @@ fig_map = px.choropleth_mapbox(
     mapbox_style="carto-positron",  # fixed
     center={"lat": 39.0742, "lon": 21.8243},
     zoom=6,
-    hover_name="hover_name",
-    hover_data={
-        VALUE_COL: False,  # We'll define hovertemplate manually
-        SHAPEFILE_KEY: False
-    },
+    custom_data=["hover_name", VALUE_COL],
     labels=labels_map
 )
 
 # Define hovertemplate with translated labels
 # Ensure that braces are properly escaped by doubling them
 hovertemplate = (
-    f"{tr('region')}: %{{hover_name}}<br>"
-    f"{tr('value_label')}: %{{color}}<extra></extra>"
+    f"{tr('region')}: %{{customdata[0]}}<br>"
+    f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
 )
 
 # Debugging: Display the hovertemplate string
-# st.write("Hovertemplate:", hovertemplate)  # Uncomment for debugging
+# Uncomment the next line to see the hovertemplate in the Streamlit app
+# st.write("Hovertemplate:", hovertemplate)
 
 fig_map.update_traces(
     hovertemplate=hovertemplate
