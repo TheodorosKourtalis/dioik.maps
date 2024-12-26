@@ -64,7 +64,6 @@ translations = {
         "sex_female": "Female",
         "sex_male": "Male",
         "sex_total": "Total",
-        "sex_unknown": "Unknown",  # Added for unexpected categories
         "region": "Region (NUTS3)",
         "tooltip_value": "Value",
         "tooltip_region": "Region",
@@ -99,7 +98,6 @@ translations = {
         "sex_female": "Θηλυκό",
         "sex_male": "Αρσενικό",
         "sex_total": "Σύνολο",
-        "sex_unknown": "Άγνωστο",  # Added for unexpected categories
         "region": "Περιοχή (NUTS3)",
         "tooltip_value": "Τιμή",
         "tooltip_region": "Περιοχή",
@@ -132,8 +130,8 @@ def tr(key, **kwargs):
 ###############################################################################
 # 5) Config Paths & Columns
 ###############################################################################
-SHAPEFILE_PATH = "NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"  # Update this path as needed
-EXCEL_FOLDER   = "output_nuts3_excels"  # Update this path as needed
+SHAPEFILE_PATH = "NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"
+EXCEL_FOLDER   = "output_nuts3_excels"
 
 SHAPEFILE_KEY  = "NUTS_ID"
 EXCEL_KEY      = "NUTS_ID"
@@ -148,35 +146,9 @@ NUTS3_LEVEL    = 3
 ###############################################################################
 # 6) Caching Functions
 ###############################################################################
-def combine_nuts_names(row):
-    """
-    Combine NAME_1, NAME_2, NAME_3 into one string,
-    skipping duplicates.
-    Adjust the column names based on your shapefile.
-    """
-    items = [
-        str(row.get("NAME_1", "")).strip(),
-        str(row.get("NAME_2", "")).strip(),
-        str(row.get("NAME_3", "")).strip()
-    ]
-    # Remove blanks and NaNs
-    items = [x for x in items if x and pd.notna(x)]
-
-    # Remove duplicates, preserve order
-    used = []
-    for it in items:
-        if it not in used:
-            used.append(it)
-
-    return " - ".join(used)
-
 @st.cache_data(show_spinner=True)
 def load_shapefile(shp_path):
     gdf_all = gpd.read_file(shp_path)
-    
-    # Debug: Display shapefile columns
-    st.write("Shapefile Columns:", gdf_all.columns.tolist())
-    
     if NUTS_LEVEL_COL not in gdf_all.columns:
         raise ValueError(tr("error_loading_shapefile", error=f"Shapefile missing '{NUTS_LEVEL_COL}' column."))
     
@@ -194,13 +166,6 @@ def load_shapefile(shp_path):
     
     if SHAPEFILE_KEY not in gdf_nuts3.columns:
         raise ValueError(tr("error_loading_shapefile", error=f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column."))
-    
-    # Create 'hover_name' column within gdf_nuts3
-    gdf_nuts3["hover_name"] = gdf_nuts3.apply(combine_nuts_names, axis=1)
-    
-    # Debug: Display 'hover_name' creation
-    st.write("gdf_nuts3 with 'hover_name':")
-    st.write(gdf_nuts3[['NUTS_ID', 'hover_name']].head())
     
     return gdf_nuts3
 
@@ -232,11 +197,6 @@ def load_all_excels(folder_path):
     
     # Make sure 'VALUE' is numeric
     df_combined[VALUE_COL] = pd.to_numeric(df_combined[VALUE_COL], errors="coerce")
-    
-    # Debug: Display combined DataFrame columns and sample
-    st.write("Combined Excel Data Columns:", df_combined.columns.tolist())
-    st.write("Combined Excel Data Sample:")
-    st.write(df_combined.head())
     
     return df_combined
 
@@ -290,7 +250,7 @@ sex_translation_map = {
 }
 
 # Translate sex options, handling unexpected values gracefully
-translated_sexes = [sex_translation_map.get(sex, tr("sex_unknown")) for sex in sexes_available]
+translated_sexes = [sex_translation_map.get(sex, sex) for sex in sexes_available]
 
 # Create a mapping from translated label to original value
 sex_mapping = {translated: original for translated, original in zip(translated_sexes, sexes_available)}
@@ -306,7 +266,7 @@ ages_available = sorted(df_all[AGE_COL].dropna().unique())
 # If age groups need translation, handle here. Assuming age groups are numerical or standardized strings.
 selected_age = st.sidebar.selectbox(tr("select_age"), options=ages_available)
 
-# 8.4) Color Scale Selection
+# **Add** a color scale selection for variety
 color_scales = ["Viridis", "Tealrose", "Inferno", "Turbo", "Plasma", "Cividis"]
 selected_color_scale = st.sidebar.selectbox(
     tr("select_color_scale"),
@@ -323,10 +283,6 @@ df_filtered = df_all[
     (df_all[AGE_COL] == selected_age)
 ]
 
-# Debug: Display filtered data
-st.write("Filtered Data Sample:")
-st.write(df_filtered.head())
-
 ###############################################################################
 # 10) Merge with Shapefile
 ###############################################################################
@@ -337,19 +293,35 @@ merged_gdf = gdf_nuts3.merge(
     right_on=EXCEL_KEY
 )
 
-# Debug: Display merged_gdf
-st.write("merged_gdf for Choropleth Map:")
-st.write(merged_gdf[['NUTS_ID', 'hover_name', 'VALUE']].head())
+###############################################################################
+# 11) Combine NUTS Level Names for Hover
+###############################################################################
+def combine_nuts_names(row):
+    """
+    Combine NUTS_Level_1, NUTS_Level_2, NUTS_Level_3 into one string,
+    skipping duplicates.
+    """
+    items = [
+        str(row.get("NUTS_Level_1", "")).strip(),
+        str(row.get("NUTS_Level_2", "")).strip(),
+        str(row.get("NUTS_Level_3", "")).strip()
+    ]
+    # Remove blanks and NaNs
+    items = [x for x in items if x and pd.notna(x)]
 
-###############################################################################
-# 11) Prepare Choropleth Map Data
-###############################################################################
-# Prepare 'custom_data' for choropleth map
+    # Remove duplicates, preserve order
+    used = []
+    for it in items:
+        if it not in used:
+            used.append(it)
+
+    return " - ".join(used)
+
+# Create 'hover_name' column
+merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names, axis=1)
+
+# Prepare 'custom_data' for hovertemplate
 merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
-
-# Debug: Display custom_data
-st.write("Choropleth Map Custom Data:")
-st.write(merged_gdf[['NUTS_ID', 'custom_data']].head())
 
 ###############################################################################
 # 12) Choropleth Map
@@ -390,13 +362,18 @@ fig_map = px.choropleth_mapbox(
 )
 
 # Define hovertemplate with translated labels
-hovertemplate_map = (
+# Ensure that braces are properly escaped by doubling them
+hovertemplate = (
     f"{tr('region')}: %{{customdata[0]}}<br>"
     f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
 )
 
+# Debugging: Display the hovertemplate string
+# Uncomment the next line to see the hovertemplate in the Streamlit app
+# st.write("Hovertemplate:", hovertemplate)
+
 fig_map.update_traces(
-    hovertemplate=hovertemplate_map
+    hovertemplate=hovertemplate
 )
 
 fig_map.update_layout(
@@ -424,33 +401,13 @@ st.plotly_chart(fig_map, use_container_width=True)
 ###############################################################################
 st.subheader(tr("bar_chart"))
 
-# Filter df_filtered to include only relevant NUTS3 regions
 df_bar = df_filtered[df_filtered[EXCEL_KEY].isin(gdf_nuts3[SHAPEFILE_KEY])].copy()
 df_bar = df_bar.dropna(subset=[VALUE_COL])
 df_bar[VALUE_COL] = pd.to_numeric(df_bar[VALUE_COL], errors="coerce")
 
-# Merge 'hover_name' from gdf_nuts3 into df_bar based on NUTS_ID
-df_bar = df_bar.merge(
-    gdf_nuts3[[SHAPEFILE_KEY, "hover_name"]],
-    on=EXCEL_KEY,
-    how="left"
-)
-
-# Debug: Display df_bar after merge
-st.write("df_bar after merging with 'hover_name':")
-st.write(df_bar[['NUTS_ID', 'hover_name', 'VALUE']].head())
-
-# Prepare 'custom_data' for hovertemplate
-df_bar["custom_data"] = df_bar.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
-
-# Debug: Display custom_data in df_bar
-st.write("Bar Chart Custom Data:")
-st.write(df_bar[['NUTS_ID', 'custom_data']].head())
-
 # Translate sex for title
 translated_sex_title = tr("sex_female") if selected_sex == "F" else tr("sex_male") if selected_sex == "M" else tr("sex_total")
 
-# Create bar chart with custom_data and hovertemplate
 fig_bar = px.bar(
     df_bar,
     x=EXCEL_KEY,
@@ -458,24 +415,12 @@ fig_bar = px.bar(
     color=VALUE_COL,
     color_continuous_scale=selected_color_scale,  # from sidebar
     range_color=(val_min, val_max),
-    custom_data=["hover_name", VALUE_COL],
     labels={
         EXCEL_KEY: tr("region"),
         VALUE_COL: tr("value"),
     },
     title=tr("bar_chart_title", year=selected_year, sex=translated_sex_title, age=selected_age)
 )
-
-# Define hovertemplate for bar chart
-hovertemplate_bar = (
-    f"{tr('region')}: %{{customdata[0]}}<br>"
-    f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
-)
-
-fig_bar.update_traces(
-    hovertemplate=hovertemplate_bar
-)
-
 fig_bar.update_layout(
     xaxis={"categoryorder": "total descending"},
     paper_bgcolor="rgba(0,0,0,0)",
