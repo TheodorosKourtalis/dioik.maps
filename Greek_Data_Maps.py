@@ -40,7 +40,7 @@ translations = {
         "language_selector": "Select Language / Επιλέξτε Γλώσσα",
         "english": "English",
         "greek": "Ελληνικά",
-        "header": "Greek Data Maps (NUTS)",
+        "header": "Greek Data Maps (NUTS3)",
         "filters": "Filters",
         "select_year": "Select Year",
         "select_sex": "Select Sex",
@@ -363,10 +363,14 @@ fig_map = px.choropleth_mapbox(
 )
 
 # Define hovertemplate with translated labels
+# Ensure that braces are properly escaped by doubling them
 hovertemplate = (
     f"{tr('region')}: %{{hover_name}}<br>"
     f"{tr('value_label')}: %{{color}}<extra></extra>"
 )
+
+# Debugging: Display the hovertemplate string
+# st.write("Hovertemplate:", hovertemplate)  # Uncomment for debugging
 
 fig_map.update_traces(
     hovertemplate=hovertemplate
