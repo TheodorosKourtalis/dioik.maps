@@ -367,16 +367,11 @@ fig_map = px.choropleth_mapbox(
     labels=labels_map
 )
 
-# Define hovertemplate with translated labels
-# Ensure that braces are properly escaped by doubling them
+# Define hovertemplate with NUTS code in parentheses
 hovertemplate = (
     f"{tr('region')}: %{{customdata[0]}}<br>"
     f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
 )
-
-# Debugging: Display the hovertemplate string
-# Uncomment the next line to see the hovertemplate in the Streamlit app
-# st.write("Hovertemplate:", hovertemplate)
 
 fig_map.update_traces(
     hovertemplate=hovertemplate
