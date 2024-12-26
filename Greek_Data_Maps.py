@@ -34,7 +34,75 @@ st.set_page_config(layout="wide")
 st.markdown(EXTRA_CSS, unsafe_allow_html=True)  # Inject the subtle style tweaks
 
 ###############################################################################
-# 3) Config Paths & Columns
+# 3) Translation Dictionary
+###############################################################################
+translations = {
+    "en": {
+        "header": "Greek Data Maps (NUTS3)",
+        "filters": "Filters",
+        "select_year": "Select Year",
+        "select_sex": "Select Sex",
+        "select_age": "Select Age Group",
+        "select_color_scale": "Select Color Scale",
+        "choropleth_map": "Choropleth Map",
+        "bar_chart": "Bar Chart (NUTS3 Regions)",
+        "footer": """
+        <hr/>
+        <p style='text-align:center; color:grey; font-size:0.9rem;'>
+        Developed by IMOP • A streamlined, modern approach to NUTS3 data visualization
+        </p>
+        """,
+        "error_loading_shapefile": "❌ Error loading shapefile: {}",
+        "error_loading_excel": "❌ Error loading Excel data: {}",
+        "success_message": "Please use the sidebar to filter the data as you please",
+        "no_excel_files": "⚠️ No .xlsx files found in folder: {}",
+        "failed_read_excel": "⚠️ Failed to read {}: {}",
+    },
+    "el": {  # Greek translations
+        "header": "Χάρτες Δεδομένων Ελλάδας (NUTS3)",
+        "filters": "Φίλτρα",
+        "select_year": "Επιλέξτε Έτος",
+        "select_sex": "Επιλέξτε Φύλο",
+        "select_age": "Επιλέξτε Ομάδα Ηλικίας",
+        "select_color_scale": "Επιλέξτε Κλίμακα Χρωμάτων",
+        "choropleth_map": "Χρωματική Χάρτης",
+        "bar_chart": "Διάγραμμα Μπάρων (Περιοχές NUTS3)",
+        "footer": """
+        <hr/>
+        <p style='text-align:center; color:grey; font-size:0.9rem;'>
+        Αναπτύχθηκε από την IMOP • Μια απλοποιημένη, σύγχρονη προσέγγιση για την οπτικοποίηση δεδομένων NUTS3
+        </p>
+        """,
+        "error_loading_shapefile": "❌ Σφάλμα κατά τη φόρτωση του shapefile: {}",
+        "error_loading_excel": "❌ Σφάλμα κατά τη φόρτωση των δεδομένων Excel: {}",
+        "success_message": "Παρακαλώ χρησιμοποιήστε τη γραβάτα για να φιλτράρετε τα δεδομένα όπως επιθυμείτε",
+        "no_excel_files": "⚠️ Δεν βρέθηκαν αρχεία .xlsx στον φάκελο: {}",
+        "failed_read_excel": "⚠️ Αποτυχία ανάγνωσης του {}: {}",
+    }
+}
+
+###############################################################################
+# 4) Language Selection
+###############################################################################
+# Add language selector in the sidebar
+language = st.sidebar.selectbox(
+    "Select Language / Επιλέξτε Γλώσσα",
+    options=["English", "Ελληνικά"],
+    index=0
+)
+
+# Map selection to language code
+lang_code = "en" if language == "English" else "el"
+
+# Function to retrieve translated text
+def tr(key, *args):
+    text = translations[lang_code].get(key, "")
+    if args:
+        return text.format(*args)
+    return text
+
+###############################################################################
+# 5) Config Paths & Columns
 ###############################################################################
 SHAPEFILE_PATH = "NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"
 EXCEL_FOLDER   = "output_nuts3_excels"
@@ -50,13 +118,13 @@ NUTS_LEVEL_COL = "LEVL_CODE"
 NUTS3_LEVEL    = 3
 
 ###############################################################################
-# 4) Caching Functions
+# 6) Caching Functions
 ###############################################################################
 @st.cache_data(show_spinner=True)
 def load_shapefile(shp_path):
     gdf_all = gpd.read_file(shp_path)
     if NUTS_LEVEL_COL not in gdf_all.columns:
-        raise ValueError(f"Shapefile missing '{NUTS_LEVEL_COL}' column.")
+        raise ValueError(tr("error_loading_shapefile", f"Shapefile missing '{NUTS_LEVEL_COL}' column."))
 
     # Reproject if needed
     if gdf_all.crs and gdf_all.crs.to_epsg() != 4326:
@@ -71,7 +139,7 @@ def load_shapefile(shp_path):
     )
 
     if SHAPEFILE_KEY not in gdf_nuts3.columns:
-        raise ValueError(f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column.")
+        raise ValueError(tr("error_loading_shapefile", f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column."))
 
     return gdf_nuts3
 
@@ -79,7 +147,7 @@ def load_shapefile(shp_path):
 def load_all_excels(folder_path):
     all_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".xlsx")]
     if not all_files:
-        raise FileNotFoundError(f"No .xlsx files found in folder: {folder_path}")
+        raise FileNotFoundError(tr("no_excel_files", folder_path))
 
     df_list = []
     for fname in all_files:
@@ -89,17 +157,17 @@ def load_all_excels(folder_path):
             df_temp = pd.read_excel(fpath, engine="openpyxl")
             df_list.append(df_temp)
         except Exception as e:
-            st.warning(f"⚠️ Failed to read {fname}: {e}")
+            st.warning(tr("failed_read_excel", fname, e))
 
     if not df_list:
-        raise ValueError("No valid Excel files were loaded.")
+        raise ValueError(tr("error_loading_excel", "No valid Excel files were loaded."))
 
     df_combined = pd.concat(df_list, ignore_index=True)
 
     # Basic checks
     for col in [EXCEL_KEY, YEAR_COL, SEX_COL, VALUE_COL]:
         if col not in df_combined.columns:
-            raise ValueError(f"Combined DataFrame missing column '{col}'.")
+            raise ValueError(tr("error_loading_excel", f"Combined DataFrame missing column '{col}'."))
 
     # Make sure 'VALUE' is numeric
     df_combined[VALUE_COL] = pd.to_numeric(df_combined[VALUE_COL], errors="coerce")
@@ -107,61 +175,61 @@ def load_all_excels(folder_path):
     return df_combined
 
 ###############################################################################
-# 5) Load Data
+# 7) Load Data
 ###############################################################################
-st.header("Greek Data Maps (NUTS3)")
+st.header(tr("header"))
 
 try:
     gdf_nuts3 = load_shapefile(SHAPEFILE_PATH)
    
 except Exception as e:
-    st.error(f"❌ Error loading shapefile: {e}")
+    st.error(tr("error_loading_shapefile", e))
     st.stop()
 
 try:
     df_all = load_all_excels(EXCEL_FOLDER)
-    st.success("Please use the sidebar to filter the data as you please")
+    st.success(tr("success_message"))
 
 except Exception as e:
-    st.error(f"❌ Error loading Excel data: {e}")
+    st.error(tr("error_loading_excel", e))
     st.stop()
 
 ###############################################################################
-# 6) Sidebar Filters
+# 8) Sidebar Filters
 ###############################################################################
-st.sidebar.header("Filters")
+st.sidebar.header(tr("filters"))
 
-# 6.1) Year Slider
+# 8.1) Year Slider
 years_available = sorted(df_all[YEAR_COL].dropna().unique())
 min_year = int(min(years_available))
 max_year = int(max(years_available))
 
 selected_year = st.sidebar.slider(
-    "Select Year",
+    tr("select_year"),
     min_value=min_year,
     max_value=max_year,
     value=min_year,
     step=1
 )
 
-# 6.2) Sex Dropdown
+# 8.2) Sex Dropdown
 sexes_available = sorted(df_all[SEX_COL].dropna().unique())
-selected_sex = st.sidebar.selectbox("Select Sex", options=sexes_available)
+selected_sex = st.sidebar.selectbox(tr("select_sex"), options=sexes_available)
 
-# 6.3) Age Group Dropdown
+# 8.3) Age Group Dropdown
 ages_available = sorted(df_all[AGE_COL].dropna().unique())
-selected_age = st.sidebar.selectbox("Select Age Group", options=ages_available)
+selected_age = st.sidebar.selectbox(tr("select_age"), options=ages_available)
 
 # **Add** a color scale selection for variety
 color_scales = ["Viridis", "Tealrose", "Inferno", "Turbo", "Plasma", "Cividis"]
 selected_color_scale = st.sidebar.selectbox(
-    "Select Color Scale",
+    tr("select_color_scale"),
     options=color_scales,
     index=0
 )
 
 ###############################################################################
-# 7) Filter Data
+# 9) Filter Data
 ###############################################################################
 df_filtered = df_all[
     (df_all[YEAR_COL] == selected_year) &
@@ -171,7 +239,7 @@ df_filtered = df_all[
 
 
 ###############################################################################
-# 8) Merge with Shapefile
+# 10) Merge with Shapefile
 ###############################################################################
 merged_gdf = gdf_nuts3.merge(
     df_filtered,
@@ -181,7 +249,7 @@ merged_gdf = gdf_nuts3.merge(
 )
 
 ###############################################################################
-# 9) Combine NUTS Level Names for Hover
+# 11) Combine NUTS Level Names for Hover
 ###############################################################################
 def combine_nuts_names(row):
     """
@@ -208,12 +276,9 @@ def combine_nuts_names(row):
 merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names, axis=1)
 
 ###############################################################################
-
-
+# 12) Choropleth Map
 ###############################################################################
-# 11) Choropleth Map
-###############################################################################
-st.subheader("Choropleth Map")
+st.subheader(tr("choropleth_map"))
 
 vals = merged_gdf[VALUE_COL].dropna()
 val_min = vals.min() if len(vals) else 0
@@ -265,9 +330,9 @@ fig_map.update_layout(
 st.plotly_chart(fig_map, use_container_width=True)
 
 ###############################################################################
-# 12) Bar Chart (NUTS3 Regions)
+# 13) Bar Chart (NUTS3 Regions)
 ###############################################################################
-st.subheader("Bar Chart (NUTS3 Regions)")
+st.subheader(tr("bar_chart"))
 
 df_bar = df_filtered[df_filtered[EXCEL_KEY].isin(gdf_nuts3[SHAPEFILE_KEY])].copy()
 df_bar = df_bar.dropna(subset=[VALUE_COL])
@@ -280,7 +345,7 @@ fig_bar = px.bar(
     color=VALUE_COL,
     color_continuous_scale=selected_color_scale,  # from sidebar
     range_color=(val_min, val_max),
-    labels={EXCEL_KEY: "Region (NUTS3)", VALUE_COL: "Value"},
+    labels={EXCEL_KEY: tr("select_age"), VALUE_COL: "Value"},  # Adjust labels if needed
     title=f"NUTS3 Bar Chart - Year={selected_year}, Sex={selected_sex}, Age={selected_age}"
 )
 fig_bar.update_layout(
@@ -298,16 +363,6 @@ fig_bar.update_layout(
 st.plotly_chart(fig_bar, use_container_width=True)
 
 ###############################################################################
-
+# 14) Footer
 ###############################################################################
-
-###############################################################################
-# 15) Footer
-###############################################################################
-st.markdown("""
-<hr/>
-<p style='text-align:center; color:grey; font-size:0.9rem;'>
-Developed by IMOP • A streamlined, modern approach to NUTS3 data visualization
-</p>
-""", unsafe_allow_html=True)
-
+st.markdown(tr("footer"), unsafe_allow_html=True)
