@@ -294,12 +294,12 @@ merged_gdf = gdf_nuts3.merge(
 )
 
 ###############################################################################
-# 11) Combine NUTS Level Names for Hover
+# 11) Combine NUTS Level Names and NUTS Code for Hover
 ###############################################################################
-def combine_nuts_names(row):
+def combine_nuts_names_with_code(row):
     """
     Combine NUTS_Level_1, NUTS_Level_2, NUTS_Level_3 into one string,
-    skipping duplicates.
+    appending the NUTS_ID in parentheses.
     """
     items = [
         str(row.get("NUTS_Level_1", "")).strip(),
@@ -315,14 +315,20 @@ def combine_nuts_names(row):
         if it not in used:
             used.append(it)
 
-    return " - ".join(used)
+    # Append NUTS_ID in parentheses
+    nuts_id = row.get(SHAPEFILE_KEY, "")
+    if nuts_id and pd.notna(nuts_id):
+        combined_name = " - ".join(used) + f" ({nuts_id})"
+    else:
+        combined_name = " - ".join(used)
+    
+    return combined_name
 
-# Create 'hover_name' column
-merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names, axis=1)
+# Create 'hover_name' column with NUTS code
+merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names_with_code, axis=1)
 
 # Prepare 'custom_data' for hovertemplate
 merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
-
 ###############################################################################
 # 12) Choropleth Map
 ###############################################################################
