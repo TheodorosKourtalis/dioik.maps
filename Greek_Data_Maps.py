@@ -324,53 +324,19 @@ merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names, axis=1)
 merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
 
 ###############################################################################
-# 12) Choropleth Map
+# 12) Choropleth Map with NUTS code in hover
 ###############################################################################
 st.subheader(tr("choropleth_map"))
 
-vals = merged_gdf[VALUE_COL].dropna()
-val_min = vals.min() if len(vals) else 0
-val_max = vals.max() if len(vals) else 1
+# Add NUTS code to custom_data
+merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[SHAPEFILE_KEY], row[VALUE_COL]], axis=1)
 
-# Expand color range if no variation
-if val_min == val_max:
-    val_min -= 1e-3
-    val_max += 1e-3
-elif (val_max - val_min) < 1e-3:
-    mid = (val_min + val_max) / 2
-    val_min = mid - 0.5
-    val_max = mid + 0.5
-
-# Create labels mapping for Plotly
-labels_map = {
-    VALUE_COL: tr("value_label"),
-    SHAPEFILE_KEY: tr("region"),
-}
-
-fig_map = px.choropleth_mapbox(
-    merged_gdf,
-    geojson=merged_gdf.__geo_interface__,
-    locations=merged_gdf.index,
-    color=VALUE_COL,
-    color_continuous_scale=selected_color_scale,  # from sidebar
-    range_color=(val_min, val_max),
-    mapbox_style="carto-positron",  # fixed
-    center={"lat": 39.0742, "lon": 21.8243},
-    zoom=6,
-    custom_data=["hover_name", VALUE_COL],
-    labels=labels_map
-)
-
-# Define hovertemplate with translated labels
-# Ensure that braces are properly escaped by doubling them
+# Update hovertemplate to include NUTS code
 hovertemplate = (
     f"{tr('region')}: %{{customdata[0]}}<br>"
-    f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
+    f"NUTS Code: %{{customdata[1]}}<br>"
+    f"{tr('value_label')}: %{{customdata[2]}}<extra></extra>"
 )
-
-# Debugging: Display the hovertemplate string
-# Uncomment the next line to see the hovertemplate in the Streamlit app
-# st.write("Hovertemplate:", hovertemplate)
 
 fig_map.update_traces(
     hovertemplate=hovertemplate
@@ -395,7 +361,6 @@ fig_map.update_layout(
 )
 
 st.plotly_chart(fig_map, use_container_width=True)
-
 ###############################################################################
 # 13) Bar Chart (NUTS3 Regions) with synchronized hover
 ###############################################################################
