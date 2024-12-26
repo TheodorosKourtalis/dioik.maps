@@ -31,7 +31,6 @@ p {
 ###############################################################################
 st.set_page_config(layout="wide")
 st.markdown(EXTRA_CSS, unsafe_allow_html=True)  # Inject the subtle style tweaks
-
 ###############################################################################
 # 3) Translation Dictionary
 ###############################################################################
@@ -85,7 +84,7 @@ translations = {
         "footer": """
         <hr/>
         <p style='text-align:center; color:grey; font-size:0.9rem;'>
-        Αναπτύχθηκε από το ΕΜΟΠ • Μια απλοποιημένη, σύγχρονη προσέγγιση για την οπτικοποίηση δεδομένων NUTS3
+        Αναπτύχθηκε από την IMOP • Μια απλοποιημένη, σύγχρονη προσέγγιση για την οπτικοποίηση δεδομένων NUTS3
         </p>
         """,
         "error_loading_shapefile": "❌ Σφάλμα κατά τη φόρτωση του shapefile: {}",
@@ -105,28 +104,32 @@ translations = {
         "color_scale_title": "Τιμή",
     }
 }
-
 ###############################################################################
 # 4) Language Selection
 ###############################################################################
-# Add language selector in the sidebar
-language = st.sidebar.selectbox(
-    "",
-    options=[translations["en"]["english"], translations["el"]["greek"]],
-    index=0,
+
+# Initialize session state for language if not already set
+if "language" not in st.session_state:
+    st.session_state.language = "en"
+
+# Language selection in the sidebar
+language_options = [translations["en"]["english"], translations["el"]["greek"]]
+selected_language = st.sidebar.selectbox(
+    translations["en"]["language_selector"],
+    options=language_options,
+    index=0 if st.session_state.language == "en" else 1,
     key="language_selector"
 )
 
-# Map selection to language code
-lang_code = "en" if language == translations["en"]["english"] else "el"
+# Update session state based on selection
+st.session_state.language = "en" if selected_language == translations["en"]["english"] else "el"
 
 # Function to retrieve translated text
 def tr(key, **kwargs):
-    text = translations[lang_code].get(key, "")
+    text = translations[st.session_state.language].get(key, "")
     if kwargs:
         return text.format(**kwargs)
     return text
-
 ###############################################################################
 # 5) Config Paths & Columns
 ###############################################################################
@@ -142,7 +145,6 @@ VALUE_COL      = "VALUE"
 
 NUTS_LEVEL_COL = "LEVL_CODE"
 NUTS3_LEVEL    = 3
-
 ###############################################################################
 # 6) Caching Functions
 ###############################################################################
@@ -199,7 +201,6 @@ def load_all_excels(folder_path):
     df_combined[VALUE_COL] = pd.to_numeric(df_combined[VALUE_COL], errors="coerce")
     
     return df_combined
-
 ###############################################################################
 # 7) Load Data
 ###############################################################################
@@ -219,7 +220,6 @@ try:
 except Exception as e:
     st.error(tr("error_loading_excel", error=e))
     st.stop()
-
 ###############################################################################
 # 8) Sidebar Filters
 ###############################################################################
@@ -230,13 +230,21 @@ years_available = sorted(df_all[YEAR_COL].dropna().unique())
 min_year = int(min(years_available))
 max_year = int(max(years_available))
 
+# Initialize session state for year if not set
+if "selected_year" not in st.session_state:
+    st.session_state.selected_year = min_year
+
 selected_year = st.sidebar.slider(
     tr("select_year"),
     min_value=min_year,
     max_value=max_year,
-    value=min_year,
-    step=1
+    value=st.session_state.selected_year,
+    step=1,
+    key="year_slider"
 )
+
+# Update session state
+st.session_state.selected_year = selected_year
 
 # 8.2) Sex Dropdown
 # Assuming the 'SEX' column has values like 'F', 'M', 'T'
@@ -255,25 +263,57 @@ translated_sexes = [sex_translation_map.get(sex, sex) for sex in sexes_available
 # Create a mapping from translated label to original value
 sex_mapping = {translated: original for translated, original in zip(translated_sexes, sexes_available)}
 
+# Initialize session state for sex if not set
+if "selected_sex_display" not in st.session_state:
+    st.session_state.selected_sex_display = translated_sexes[0]
+
 # Select the translated sex label
-selected_sex_display = st.sidebar.selectbox(tr("select_sex"), options=translated_sexes)
+selected_sex_display = st.sidebar.selectbox(
+    tr("select_sex"),
+    options=translated_sexes,
+    index=translated_sexes.index(st.session_state.selected_sex_display) if st.session_state.selected_sex_display in translated_sexes else 0,
+    key="sex_selectbox"
+)
+
+# Update session state
+st.session_state.selected_sex_display = selected_sex_display
 
 # Get the original sex value for filtering
 selected_sex = sex_mapping[selected_sex_display]
 
 # 8.3) Age Group Dropdown
 ages_available = sorted(df_all[AGE_COL].dropna().unique())
-# If age groups need translation, handle here. Assuming age groups are numerical or standardized strings.
-selected_age = st.sidebar.selectbox(tr("select_age"), options=ages_available)
 
-# **Add** a color scale selection for variety
+# Initialize session state for age if not set
+if "selected_age" not in st.session_state:
+    st.session_state.selected_age = ages_available[0]
+
+selected_age = st.sidebar.selectbox(
+    tr("select_age"),
+    options=ages_available,
+    index=ages_available.index(st.session_state.selected_age) if st.session_state.selected_age in ages_available else 0,
+    key="age_selectbox"
+)
+
+# Update session state
+st.session_state.selected_age = selected_age
+
+# 8.4) Color Scale Selection
 color_scales = ["Viridis", "Tealrose", "Inferno", "Turbo", "Plasma", "Cividis"]
+
+# Initialize session state for color scale if not set
+if "selected_color_scale" not in st.session_state:
+    st.session_state.selected_color_scale = color_scales[0]
+
 selected_color_scale = st.sidebar.selectbox(
     tr("select_color_scale"),
     options=color_scales,
-    index=0
+    index=color_scales.index(st.session_state.selected_color_scale) if st.session_state.selected_color_scale in color_scales else 0,
+    key="color_scale_selectbox"
 )
 
+# Update session state
+st.session_state.selected_color_scale = selected_color_scale
 ###############################################################################
 # 9) Filter Data
 ###############################################################################
@@ -282,7 +322,6 @@ df_filtered = df_all[
     (df_all[SEX_COL] == selected_sex) &
     (df_all[AGE_COL] == selected_age)
 ]
-
 ###############################################################################
 # 10) Merge with Shapefile
 ###############################################################################
@@ -292,7 +331,6 @@ merged_gdf = gdf_nuts3.merge(
     left_on=SHAPEFILE_KEY,
     right_on=EXCEL_KEY
 )
-
 ###############################################################################
 # 11) Combine NUTS Level Names and NUTS Code for Hover
 ###############################################################################
@@ -358,7 +396,7 @@ fig_map = px.choropleth_mapbox(
     geojson=merged_gdf.__geo_interface__,
     locations=merged_gdf.index,
     color=VALUE_COL,
-    color_continuous_scale=selected_color_scale,  # from sidebar
+    color_continuous_scale=st.session_state.selected_color_scale,  # from sidebar
     range_color=(val_min, val_max),
     mapbox_style="carto-positron",  # fixed
     center={"lat": 39.0742, "lon": 21.8243},
@@ -396,7 +434,6 @@ fig_map.update_layout(
 )
 
 st.plotly_chart(fig_map, use_container_width=True)
-
 ###############################################################################
 # 13) Bar Chart (NUTS3 Regions) with Synchronized Hover and NUTS Code
 ###############################################################################
@@ -418,13 +455,12 @@ translated_sex_title = (
     else tr("sex_total")
 )
 
-# Create the bar chart
 fig_bar = px.bar(
     df_bar,
     x=EXCEL_KEY,
     y=VALUE_COL,
     color=VALUE_COL,
-    color_continuous_scale=selected_color_scale,  # from sidebar
+    color_continuous_scale=st.session_state.selected_color_scale,  # from sidebar
     range_color=(val_min, val_max),
     labels={
         EXCEL_KEY: tr("region"),
@@ -441,7 +477,9 @@ hovertemplate_bar = (
 )
 
 # Update the hovertemplate
-fig_bar.update_traces(hovertemplate=hovertemplate_bar)
+fig_bar.update_traces(
+    hovertemplate=hovertemplate_bar
+)
 
 # Update layout for aesthetics
 fig_bar.update_layout(
