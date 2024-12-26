@@ -69,6 +69,7 @@ translations = {
         "tooltip_region": "Region",
         "bar_chart_title": "NUTS3 Bar Chart - Year={year}, Sex={sex}, Age={age}",
         "color_scale_title": "Value",
+        "nuts_code": "NUTS Code",
     },
     "el": {  # Greek translations
         "language_selector": "Επιλέξτε Γλώσσα / Select Language",
@@ -103,6 +104,7 @@ translations = {
         "tooltip_region": "Περιοχή",
         "bar_chart_title": "Διάγραμμα Μπάρων NUTS3 - Έτος={year}, Φύλο={sex}, Ηλικία={age}",
         "color_scale_title": "Τιμή",
+        "nuts_code": "Κωδικός NUTS",
     }
 }
 
@@ -111,7 +113,7 @@ translations = {
 ###############################################################################
 # Add language selector in the sidebar
 language = st.sidebar.selectbox(
-    "",
+    translations["en"]["language_selector"],
     options=[translations["en"]["english"], translations["el"]["greek"]],
     index=0,
     key="language_selector"
@@ -130,11 +132,11 @@ def tr(key, **kwargs):
 ###############################################################################
 # 5) Config Paths & Columns
 ###############################################################################
-SHAPEFILE_PATH = "NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"
-EXCEL_FOLDER   = "output_nuts3_excels"
+SHAPEFILE_PATH = "NUTS_RG_01M_2024_3035.shp/NUTS_RG_01M_2024_3035.shp"  # Update as per your directory
+EXCEL_FOLDER   = "output_nuts3_excels"  # Update as per your directory
 
-SHAPEFILE_KEY  = "NUTS_ID"
-EXCEL_KEY      = "NUTS_ID"
+SHAPEFILE_KEY  = "NUTS_ID"  # Column in shapefile for NUTS code
+EXCEL_KEY      = "NUTS_ID"  # Column in Excel files for NUTS code
 YEAR_COL       = "YEAR"
 SEX_COL        = "SEX"
 AGE_COL        = "age"  # User can pick from all age groups
@@ -148,7 +150,11 @@ NUTS3_LEVEL    = 3
 ###############################################################################
 @st.cache_data(show_spinner=True)
 def load_shapefile(shp_path):
-    gdf_all = gpd.read_file(shp_path)
+    try:
+        gdf_all = gpd.read_file(shp_path)
+    except Exception as e:
+        raise ValueError(tr("error_loading_shapefile", error=e))
+    
     if NUTS_LEVEL_COL not in gdf_all.columns:
         raise ValueError(tr("error_loading_shapefile", error=f"Shapefile missing '{NUTS_LEVEL_COL}' column."))
     
@@ -159,18 +165,45 @@ def load_shapefile(shp_path):
     # Filter to NUTS3
     gdf_nuts3 = gdf_all[gdf_all[NUTS_LEVEL_COL] == NUTS3_LEVEL].copy()
     
+    if SHAPEFILE_KEY not in gdf_nuts3.columns:
+        raise ValueError(tr("error_loading_shapefile", error=f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column."))
+    
     # Simplify geometry for speed
     gdf_nuts3["geometry"] = gdf_nuts3.geometry.simplify(
         tolerance=0.02, preserve_topology=True
     )
     
-    if SHAPEFILE_KEY not in gdf_nuts3.columns:
-        raise ValueError(tr("error_loading_shapefile", error=f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column."))
+    # Combine NUTS names for hover
+    def combine_nuts_names(row):
+        """
+        Combine NUTS_Level_1, NUTS_Level_2, NUTS_Level_3 into one string,
+        skipping duplicates.
+        """
+        items = [
+            str(row.get("NUTS_Level_1", "")).strip(),
+            str(row.get("NUTS_Level_2", "")).strip(),
+            str(row.get("NUTS_Level_3", "")).strip()
+        ]
+        # Remove blanks and NaNs
+        items = [x for x in items if x and pd.notna(x)]
+
+        # Remove duplicates, preserve order
+        used = []
+        for it in items:
+            if it not in used:
+                used.append(it)
+
+        return " - ".join(used)
+    
+    gdf_nuts3["hover_name"] = gdf_nuts3.apply(combine_nuts_names, axis=1)
     
     return gdf_nuts3
 
 @st.cache_data(show_spinner=True)
 def load_all_excels(folder_path):
+    if not os.path.exists(folder_path):
+        raise FileNotFoundError(tr("no_excel_files", folder_path=folder_path))
+    
     all_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".xlsx")]
     if not all_files:
         raise FileNotFoundError(tr("no_excel_files", folder_path=folder_path))
@@ -178,7 +211,6 @@ def load_all_excels(folder_path):
     df_list = []
     for fname in all_files:
         fpath = os.path.join(folder_path, fname)
-        # Force engine='openpyxl'
         try:
             df_temp = pd.read_excel(fpath, engine="openpyxl")
             df_list.append(df_temp)
@@ -191,11 +223,11 @@ def load_all_excels(folder_path):
     df_combined = pd.concat(df_list, ignore_index=True)
     
     # Basic checks
-    for col in [EXCEL_KEY, YEAR_COL, SEX_COL, VALUE_COL]:
+    for col in [EXCEL_KEY, YEAR_COL, SEX_COL, AGE_COL, VALUE_COL]:
         if col not in df_combined.columns:
             raise ValueError(tr("error_loading_excel", error=f"Combined DataFrame missing column '{col}'."))
     
-    # Make sure 'VALUE' is numeric
+    # Ensure 'VALUE' is numeric
     df_combined[VALUE_COL] = pd.to_numeric(df_combined[VALUE_COL], errors="coerce")
     
     return df_combined
@@ -207,17 +239,15 @@ st.header(tr("header"))
 
 try:
     gdf_nuts3 = load_shapefile(SHAPEFILE_PATH)
-   
 except Exception as e:
-    st.error(tr("error_loading_shapefile", error=e))
+    st.error(e)
     st.stop()
 
 try:
     df_all = load_all_excels(EXCEL_FOLDER)
     st.success(tr("success_message"))
-
 except Exception as e:
-    st.error(tr("error_loading_excel", error=e))
+    st.error(e)
     st.stop()
 
 ###############################################################################
@@ -263,10 +293,9 @@ selected_sex = sex_mapping[selected_sex_display]
 
 # 8.3) Age Group Dropdown
 ages_available = sorted(df_all[AGE_COL].dropna().unique())
-# If age groups need translation, handle here. Assuming age groups are numerical or standardized strings.
 selected_age = st.sidebar.selectbox(tr("select_age"), options=ages_available)
 
-# **Add** a color scale selection for variety
+# 8.4) Color Scale Selection
 color_scales = ["Viridis", "Tealrose", "Inferno", "Turbo", "Plasma", "Cividis"]
 selected_color_scale = st.sidebar.selectbox(
     tr("select_color_scale"),
@@ -294,48 +323,58 @@ merged_gdf = gdf_nuts3.merge(
 )
 
 ###############################################################################
-# 11) Combine NUTS Level Names for Hover
-###############################################################################
-def combine_nuts_names(row):
-    """
-    Combine NUTS_Level_1, NUTS_Level_2, NUTS_Level_3 into one string,
-    skipping duplicates.
-    """
-    items = [
-        str(row.get("NUTS_Level_1", "")).strip(),
-        str(row.get("NUTS_Level_2", "")).strip(),
-        str(row.get("NUTS_Level_3", "")).strip()
-    ]
-    # Remove blanks and NaNs
-    items = [x for x in items if x and pd.notna(x)]
-
-    # Remove duplicates, preserve order
-    used = []
-    for it in items:
-        if it not in used:
-            used.append(it)
-
-    return " - ".join(used)
-
-# Create 'hover_name' column
-merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names, axis=1)
-
-# Prepare 'custom_data' for hovertemplate
-merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
-
-###############################################################################
-# 12) Choropleth Map with NUTS code in hover
+# 11) Choropleth Map
 ###############################################################################
 st.subheader(tr("choropleth_map"))
 
-# Add NUTS code to custom_data
-merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[SHAPEFILE_KEY], row[VALUE_COL]], axis=1)
+# Handle missing values by setting to 0 or another appropriate value
+merged_gdf[VALUE_COL] = merged_gdf[VALUE_COL].fillna(0)
 
-# Update hovertemplate to include NUTS code
+vals = merged_gdf[VALUE_COL].dropna()
+val_min = vals.min() if not vals.empty else 0
+val_max = vals.max() if not vals.empty else 1
+
+# Expand color range if no variation
+if val_min == val_max:
+    val_min -= 1e-3
+    val_max += 1e-3
+elif (val_max - val_min) < 1e-3:
+    mid = (val_min + val_max) / 2
+    val_min = mid - 0.5
+    val_max = mid + 0.5
+
+# Create labels mapping for Plotly
+labels_map = {
+    VALUE_COL: tr("value_label"),
+    SHAPEFILE_KEY: tr("region"),
+    "hover_name": tr("region"),
+    "nuts_code": tr("nuts_code"),
+}
+
+# Create the choropleth map
+try:
+    fig_map = px.choropleth_mapbox(
+        merged_gdf,
+        geojson=merged_gdf.__geo_interface__,
+        locations=merged_gdf.index,
+        color=VALUE_COL,
+        color_continuous_scale=selected_color_scale,
+        range_color=(val_min, val_max),
+        mapbox_style="carto-positron",
+        center={"lat": 39.0742, "lon": 21.8243},
+        zoom=6,
+        custom_data=["hover_name", SHAPEFILE_KEY, VALUE_COL],
+        labels=labels_map
+    )
+except Exception as e:
+    st.error(tr("error_loading_shapefile", error=e))
+    st.stop()
+
+# Define hovertemplate with translated labels and NUTS code
 hovertemplate = (
-    f"{tr('region')}: %{{customdata[0]}}<br>"
-    f"NUTS Code: %{{customdata[1]}}<br>"
-    f"{tr('value_label')}: %{{customdata[2]}}<extra></extra>"
+    f"{tr('tooltip_region')}: %{{customdata[0]}}<br>"
+    f"{tr('nuts_code')}: %{{customdata[1]}}<br>"
+    f"{tr('tooltip_value')}: %{{customdata[2]}}<extra></extra>"
 )
 
 fig_map.update_traces(
@@ -361,19 +400,25 @@ fig_map.update_layout(
 )
 
 st.plotly_chart(fig_map, use_container_width=True)
+
 ###############################################################################
-# 13) Bar Chart (NUTS3 Regions) with synchronized hover
+# 12) Bar Chart (NUTS3 Regions)
 ###############################################################################
 st.subheader(tr("bar_chart"))
 
-# Filter and prepare the data for the bar chart
+# Prepare data for the bar chart
 df_bar = df_filtered[df_filtered[EXCEL_KEY].isin(gdf_nuts3[SHAPEFILE_KEY])].copy()
 df_bar = df_bar.dropna(subset=[VALUE_COL])
 df_bar[VALUE_COL] = pd.to_numeric(df_bar[VALUE_COL], errors="coerce")
 
-# Add a column for hover information (same as in the map)
-df_bar["hover_name"] = df_bar.apply(lambda row: combine_nuts_names(row), axis=1)
-df_bar["custom_data"] = df_bar.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
+# Merge to get hover names
+df_bar = df_bar.merge(gdf_nuts3[[SHAPEFILE_KEY, "hover_name"]], how="left", left_on=EXCEL_KEY, right_on=SHAPEFILE_KEY)
+
+# Handle missing hover names
+df_bar["hover_name"] = df_bar["hover_name"].fillna(df_bar[EXCEL_KEY])
+
+# Add NUTS code to hover data
+df_bar["custom_data"] = df_bar.apply(lambda row: [row["hover_name"], row[EXCEL_KEY], row[VALUE_COL]], axis=1)
 
 # Translate sex for title
 translated_sex_title = tr("sex_female") if selected_sex == "F" else tr("sex_male") if selected_sex == "M" else tr("sex_total")
@@ -381,29 +426,30 @@ translated_sex_title = tr("sex_female") if selected_sex == "F" else tr("sex_male
 # Create the bar chart
 fig_bar = px.bar(
     df_bar,
-    x=EXCEL_KEY,
+    x="hover_name",
     y=VALUE_COL,
     color=VALUE_COL,
-    color_continuous_scale=selected_color_scale,  # from sidebar
+    color_continuous_scale=selected_color_scale,
     range_color=(val_min, val_max),
     labels={
-        EXCEL_KEY: tr("region"),
+        "hover_name": tr("region"),
         VALUE_COL: tr("value"),
     },
     title=tr("bar_chart_title", year=selected_year, sex=translated_sex_title, age=selected_age),
-    custom_data=["hover_name", VALUE_COL]  # Add custom data for hover
+    custom_data=["hover_name", EXCEL_KEY, VALUE_COL]  # Include NUTS code in custom data
 )
 
-# Define hovertemplate for bar chart (consistent with the map)
+# Define hovertemplate for bar chart
 hovertemplate_bar = (
-    f"{tr('region')}: %{{customdata[0]}}<br>"
-    f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
+    f"{tr('tooltip_region')}: %{{customdata[0]}}<br>"
+    f"{tr('nuts_code')}: %{{customdata[1]}}<br>"
+    f"{tr('tooltip_value')}: %{{customdata[2]}}<extra></extra>"
 )
 
-# Update the hovertemplate
-fig_bar.update_traces(hovertemplate=hovertemplate_bar)
+fig_bar.update_traces(
+    hovertemplate=hovertemplate_bar
+)
 
-# Update layout for aesthetics
 fig_bar.update_layout(
     xaxis={"categoryorder": "total descending"},
     paper_bgcolor="rgba(0,0,0,0)",
@@ -417,9 +463,9 @@ fig_bar.update_layout(
     )
 )
 
-# Display the bar chart
 st.plotly_chart(fig_bar, use_container_width=True)
+
 ###############################################################################
-# 14) Footer
+# 13) Footer
 ###############################################################################
 st.markdown(tr("footer"), unsafe_allow_html=True)
