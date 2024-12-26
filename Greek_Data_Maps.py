@@ -3,7 +3,6 @@ import geopandas as gpd
 import pandas as pd
 import plotly.express as px
 import os
-import io
 
 ###############################################################################
 # 1) Minimal Extra CSS (still white theme, just nicer headings & footers)
@@ -61,8 +60,10 @@ translations = {
         "no_excel_files": "⚠️ No .xlsx files found in folder: {}",
         "failed_read_excel": "⚠️ Failed to read {}: {}",
         "value": "Value",
+        "value_label": "Value",  # For colorbar title
         "sex_female": "Female",
         "sex_male": "Male",
+        "sex_total": "Total",
         "region": "Region (NUTS3)",
         "tooltip_value": "Value",
         "tooltip_region": "Region",
@@ -93,8 +94,10 @@ translations = {
         "no_excel_files": "⚠️ Δεν βρέθηκαν αρχεία .xlsx στον φάκελο: {}",
         "failed_read_excel": "⚠️ Αποτυχία ανάγνωσης του {}: {}",
         "value": "Τιμή",
+        "value_label": "Τιμή",  # For colorbar title
         "sex_female": "Θηλυκό",
         "sex_male": "Αρσενικό",
+        "sex_total": "Σύνολο",
         "region": "Περιοχή (NUTS3)",
         "tooltip_value": "Τιμή",
         "tooltip_region": "Περιοχή",
@@ -148,22 +151,22 @@ def load_shapefile(shp_path):
     gdf_all = gpd.read_file(shp_path)
     if NUTS_LEVEL_COL not in gdf_all.columns:
         raise ValueError(tr("error_loading_shapefile", error=f"Shapefile missing '{NUTS_LEVEL_COL}' column."))
-
+    
     # Reproject if needed
     if gdf_all.crs and gdf_all.crs.to_epsg() != 4326:
         gdf_all = gdf_all.to_crs(epsg=4326)
-
+    
     # Filter to NUTS3
     gdf_nuts3 = gdf_all[gdf_all[NUTS_LEVEL_COL] == NUTS3_LEVEL].copy()
-
+    
     # Simplify geometry for speed
     gdf_nuts3["geometry"] = gdf_nuts3.geometry.simplify(
         tolerance=0.02, preserve_topology=True
     )
-
+    
     if SHAPEFILE_KEY not in gdf_nuts3.columns:
         raise ValueError(tr("error_loading_shapefile", error=f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column."))
-
+    
     return gdf_nuts3
 
 @st.cache_data(show_spinner=True)
@@ -171,7 +174,7 @@ def load_all_excels(folder_path):
     all_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".xlsx")]
     if not all_files:
         raise FileNotFoundError(tr("no_excel_files", folder_path=folder_path))
-
+    
     df_list = []
     for fname in all_files:
         fpath = os.path.join(folder_path, fname)
@@ -181,20 +184,20 @@ def load_all_excels(folder_path):
             df_list.append(df_temp)
         except Exception as e:
             st.warning(tr("failed_read_excel", file=fname, error=e))
-
+    
     if not df_list:
         raise ValueError(tr("error_loading_excel", error="No valid Excel files were loaded."))
-
+    
     df_combined = pd.concat(df_list, ignore_index=True)
-
+    
     # Basic checks
     for col in [EXCEL_KEY, YEAR_COL, SEX_COL, VALUE_COL]:
         if col not in df_combined.columns:
             raise ValueError(tr("error_loading_excel", error=f"Combined DataFrame missing column '{col}'."))
-
+    
     # Make sure 'VALUE' is numeric
     df_combined[VALUE_COL] = pd.to_numeric(df_combined[VALUE_COL], errors="coerce")
-
+    
     return df_combined
 
 ###############################################################################
@@ -236,12 +239,26 @@ selected_year = st.sidebar.slider(
 )
 
 # 8.2) Sex Dropdown
-# Assuming the 'SEX' column has values like 'F' and 'M'
+# Assuming the 'SEX' column has values like 'F', 'M', 'T'
 sexes_available = sorted(df_all[SEX_COL].dropna().unique())
-# Translate sex options
-translated_sexes = [tr("sex_female") if sex == "F" else tr("sex_male") for sex in sexes_available]
-sex_mapping = dict(zip(translated_sexes, sexes_available))  # Displayed: Actual value
+
+# Define a mapping for sex translations
+sex_translation_map = {
+    "F": tr("sex_female"),
+    "M": tr("sex_male"),
+    "T": tr("sex_total")
+}
+
+# Translate sex options, handling unexpected values gracefully
+translated_sexes = [sex_translation_map.get(sex, sex) for sex in sexes_available]
+
+# Create a mapping from translated label to original value
+sex_mapping = {translated: original for translated, original in zip(translated_sexes, sexes_available)}
+
+# Select the translated sex label
 selected_sex_display = st.sidebar.selectbox(tr("select_sex"), options=translated_sexes)
+
+# Get the original sex value for filtering
 selected_sex = sex_mapping[selected_sex_display]
 
 # 8.3) Age Group Dropdown
@@ -321,6 +338,12 @@ elif (val_max - val_min) < 1e-3:
     val_min = mid - 0.5
     val_max = mid + 0.5
 
+# Create labels mapping for plotly
+labels_map = {
+    VALUE_COL: tr("value_label"),
+    SHAPEFILE_KEY: tr("region"),
+}
+
 fig_map = px.choropleth_mapbox(
     merged_gdf,
     geojson=merged_gdf.__geo_interface__,
@@ -333,16 +356,26 @@ fig_map = px.choropleth_mapbox(
     zoom=6,
     hover_name="hover_name",
     hover_data={
-        VALUE_COL: tr("tooltip_value"),
+        VALUE_COL: False,  # We'll define hovertemplate manually
         SHAPEFILE_KEY: False
-    }
+    },
+    labels=labels_map
 )
+
+# Define hovertemplate with translated labels
+fig_map.update_traces(
+    hovertemplate=(
+        f"{tr('region')}: %{{hover_name}}<br>"
+        f"{tr('value_label')}: %{{color}}<extra></extra>"
+    )
+)
+
 fig_map.update_layout(
     margin=dict(r=0, t=0, l=0, b=0),
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
     coloraxis_colorbar=dict(
-        title=tr("color_scale_title"),
+        title=tr("value_label"),
         orientation="h",
         yanchor="bottom",
         xanchor="left",
@@ -366,6 +399,9 @@ df_bar = df_filtered[df_filtered[EXCEL_KEY].isin(gdf_nuts3[SHAPEFILE_KEY])].copy
 df_bar = df_bar.dropna(subset=[VALUE_COL])
 df_bar[VALUE_COL] = pd.to_numeric(df_bar[VALUE_COL], errors="coerce")
 
+# Translate sex for title
+translated_sex_title = tr("sex_female") if selected_sex == "F" else tr("sex_male") if selected_sex == "M" else tr("sex_total")
+
 fig_bar = px.bar(
     df_bar,
     x=EXCEL_KEY,
@@ -375,9 +411,9 @@ fig_bar = px.bar(
     range_color=(val_min, val_max),
     labels={
         EXCEL_KEY: tr("region"),
-        VALUE_COL: tr("value")
+        VALUE_COL: tr("value"),
     },
-    title=tr("bar_chart_title", year=selected_year, sex=tr("sex_female") if selected_sex == "F" else tr("sex_male"), age=selected_age)
+    title=tr("bar_chart_title", year=selected_year, sex=translated_sex_title, age=selected_age)
 )
 fig_bar.update_layout(
     xaxis={"categoryorder": "total descending"},
@@ -385,7 +421,7 @@ fig_bar.update_layout(
     plot_bgcolor="rgba(0,0,0,0)",
     margin=dict(r=20, t=80, l=0, b=0),
     coloraxis_colorbar=dict(
-        title=tr("color_scale_title"),
+        title=tr("value_label"),
         orientation="v",
         thickness=15,
         len=0.4
