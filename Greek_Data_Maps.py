@@ -398,17 +398,27 @@ fig_map.update_layout(
 st.plotly_chart(fig_map, use_container_width=True)
 
 ###############################################################################
-# 13) Bar Chart (NUTS3 Regions)
+# 13) Bar Chart (NUTS3 Regions) with Synchronized Hover and NUTS Code
 ###############################################################################
 st.subheader(tr("bar_chart"))
 
+# Filter and prepare the data for the bar chart
 df_bar = df_filtered[df_filtered[EXCEL_KEY].isin(gdf_nuts3[SHAPEFILE_KEY])].copy()
 df_bar = df_bar.dropna(subset=[VALUE_COL])
 df_bar[VALUE_COL] = pd.to_numeric(df_bar[VALUE_COL], errors="coerce")
 
-# Translate sex for title
-translated_sex_title = tr("sex_female") if selected_sex == "F" else tr("sex_male") if selected_sex == "M" else tr("sex_total")
+# Add a column for hover information (same as in the map)
+df_bar["hover_name"] = df_bar.apply(lambda row: combine_nuts_names_with_code(row), axis=1)
+df_bar["custom_data"] = df_bar.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
 
+# Translate sex for title
+translated_sex_title = (
+    tr("sex_female") if selected_sex == "F" 
+    else tr("sex_male") if selected_sex == "M" 
+    else tr("sex_total")
+)
+
+# Create the bar chart
 fig_bar = px.bar(
     df_bar,
     x=EXCEL_KEY,
@@ -420,8 +430,20 @@ fig_bar = px.bar(
         EXCEL_KEY: tr("region"),
         VALUE_COL: tr("value"),
     },
-    title=tr("bar_chart_title", year=selected_year, sex=translated_sex_title, age=selected_age)
+    title=tr("bar_chart_title", year=selected_year, sex=translated_sex_title, age=selected_age),
+    custom_data=["hover_name", VALUE_COL]  # Add custom data for hover
 )
+
+# Define hovertemplate for bar chart (consistent with the map)
+hovertemplate_bar = (
+    f"{tr('region')}: %{{customdata[0]}}<br>"
+    f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
+)
+
+# Update the hovertemplate
+fig_bar.update_traces(hovertemplate=hovertemplate_bar)
+
+# Update layout for aesthetics
 fig_bar.update_layout(
     xaxis={"categoryorder": "total descending"},
     paper_bgcolor="rgba(0,0,0,0)",
@@ -435,8 +457,8 @@ fig_bar.update_layout(
     )
 )
 
+# Display the bar chart
 st.plotly_chart(fig_bar, use_container_width=True)
-
 ###############################################################################
 # 14) Footer
 ###############################################################################
