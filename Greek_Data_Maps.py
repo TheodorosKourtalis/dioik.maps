@@ -363,11 +363,13 @@ fig_map = px.choropleth_mapbox(
 )
 
 # Define hovertemplate with translated labels
+hovertemplate = (
+    f"{tr('region')}: %{{hover_name}}<br>"
+    f"{tr('value_label')}: %{{color}}<extra></extra>"
+)
+
 fig_map.update_traces(
-    hovertemplate=(
-        f"{tr('region')}: %{{hover_name}}<br>"
-        f"{tr('value_label')}: %{{color}}<extra></extra>"
-    )
+    hovertemplate=hovertemplate
 )
 
 fig_map.update_layout(
