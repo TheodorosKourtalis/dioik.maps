@@ -266,7 +266,7 @@ ages_available = sorted(df_all[AGE_COL].dropna().unique())
 # If age groups need translation, handle here. Assuming age groups are numerical or standardized strings.
 selected_age = st.sidebar.selectbox(tr("select_age"), options=ages_available)
 
-# **Add** a color scale selection for variety
+# 8.4) Color Scale Selection
 color_scales = ["Viridis", "Tealrose", "Inferno", "Turbo", "Plasma", "Cividis"]
 selected_color_scale = st.sidebar.selectbox(
     tr("select_color_scale"),
@@ -320,7 +320,7 @@ def combine_nuts_names(row):
 # Create 'hover_name' column
 merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names, axis=1)
 
-# Prepare 'custom_data' for hovertemplate
+# Prepare 'custom_data' for choropleth map
 merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
 
 ###############################################################################
@@ -363,17 +363,13 @@ fig_map = px.choropleth_mapbox(
 
 # Define hovertemplate with translated labels
 # Ensure that braces are properly escaped by doubling them
-hovertemplate = (
+hovertemplate_map = (
     f"{tr('region')}: %{{customdata[0]}}<br>"
     f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
 )
 
-# Debugging: Display the hovertemplate string
-# Uncomment the next line to see the hovertemplate in the Streamlit app
-# st.write("Hovertemplate:", hovertemplate)
-
 fig_map.update_traces(
-    hovertemplate=hovertemplate
+    hovertemplate=hovertemplate_map
 )
 
 fig_map.update_layout(
@@ -401,13 +397,25 @@ st.plotly_chart(fig_map, use_container_width=True)
 ###############################################################################
 st.subheader(tr("bar_chart"))
 
+# Filter df_filtered to include only relevant NUTS3 regions
 df_bar = df_filtered[df_filtered[EXCEL_KEY].isin(gdf_nuts3[SHAPEFILE_KEY])].copy()
 df_bar = df_bar.dropna(subset=[VALUE_COL])
 df_bar[VALUE_COL] = pd.to_numeric(df_bar[VALUE_COL], errors="coerce")
 
+# Merge 'hover_name' from gdf_nuts3 into df_bar based on NUTS_ID
+df_bar = df_bar.merge(
+    gdf_nuts3[[SHAPEFILE_KEY, "hover_name"]],
+    on=EXCEL_KEY,
+    how="left"
+)
+
+# Prepare 'custom_data' for hovertemplate
+df_bar["custom_data"] = df_bar.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
+
 # Translate sex for title
 translated_sex_title = tr("sex_female") if selected_sex == "F" else tr("sex_male") if selected_sex == "M" else tr("sex_total")
 
+# Create bar chart with custom_data and hovertemplate
 fig_bar = px.bar(
     df_bar,
     x=EXCEL_KEY,
@@ -415,12 +423,24 @@ fig_bar = px.bar(
     color=VALUE_COL,
     color_continuous_scale=selected_color_scale,  # from sidebar
     range_color=(val_min, val_max),
+    custom_data=["hover_name", VALUE_COL],
     labels={
         EXCEL_KEY: tr("region"),
         VALUE_COL: tr("value"),
     },
     title=tr("bar_chart_title", year=selected_year, sex=translated_sex_title, age=selected_age)
 )
+
+# Define hovertemplate for bar chart
+hovertemplate_bar = (
+    f"{tr('region')}: %{{customdata[0]}}<br>"
+    f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
+)
+
+fig_bar.update_traces(
+    hovertemplate=hovertemplate_bar
+)
+
 fig_bar.update_layout(
     xaxis={"categoryorder": "total descending"},
     paper_bgcolor="rgba(0,0,0,0)",
