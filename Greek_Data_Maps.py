@@ -64,12 +64,12 @@ translations = {
         "sex_female": "Female",
         "sex_male": "Male",
         "sex_total": "Total",
+        "sex_unknown": "Unknown",  # Added for unexpected categories
         "region": "Region (NUTS3)",
         "tooltip_value": "Value",
         "tooltip_region": "Region",
         "bar_chart_title": "NUTS3 Bar Chart - Year={year}, Sex={sex}, Age={age}",
         "color_scale_title": "Value",
-        "sex_unknown": "Unknown",  # Added for unexpected categories
     },
     "el": {  # Greek translations
         "language_selector": "Επιλέξτε Γλώσσα / Select Language",
@@ -99,12 +99,12 @@ translations = {
         "sex_female": "Θηλυκό",
         "sex_male": "Αρσενικό",
         "sex_total": "Σύνολο",
+        "sex_unknown": "Άγνωστο",  # Added for unexpected categories
         "region": "Περιοχή (NUTS3)",
         "tooltip_value": "Τιμή",
         "tooltip_region": "Περιοχή",
         "bar_chart_title": "Διάγραμμα Μπάρων NUTS3 - Έτος={year}, Φύλο={sex}, Ηλικία={age}",
         "color_scale_title": "Τιμή",
-        "sex_unknown": "Άγνωστο",  # Added for unexpected categories
     }
 }
 
@@ -150,13 +150,14 @@ NUTS3_LEVEL    = 3
 ###############################################################################
 def combine_nuts_names(row):
     """
-    Combine NUTS_Level_1, NUTS_Level_2, NUTS_Level_3 into one string,
+    Combine NAME_1, NAME_2, NAME_3 into one string,
     skipping duplicates.
+    Adjust the column names based on your shapefile.
     """
     items = [
-        str(row.get("NUTS_Level_1", "")).strip(),
-        str(row.get("NUTS_Level_2", "")).strip(),
-        str(row.get("NUTS_Level_3", "")).strip()
+        str(row.get("NAME_1", "")).strip(),
+        str(row.get("NAME_2", "")).strip(),
+        str(row.get("NAME_3", "")).strip()
     ]
     # Remove blanks and NaNs
     items = [x for x in items if x and pd.notna(x)]
@@ -232,7 +233,7 @@ def load_all_excels(folder_path):
     # Make sure 'VALUE' is numeric
     df_combined[VALUE_COL] = pd.to_numeric(df_combined[VALUE_COL], errors="coerce")
     
-    # Debug: Display combined DataFrame columns
+    # Debug: Display combined DataFrame columns and sample
     st.write("Combined Excel Data Columns:", df_combined.columns.tolist())
     st.write("Combined Excel Data Sample:")
     st.write(df_combined.head())
