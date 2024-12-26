@@ -146,9 +146,31 @@ NUTS3_LEVEL    = 3
 ###############################################################################
 # 6) Caching Functions
 ###############################################################################
+def combine_nuts_names(row):
+    """
+    Combine NUTS_Level_1, NUTS_Level_2, NUTS_Level_3 into one string,
+    skipping duplicates.
+    """
+    items = [
+        str(row.get("NUTS_Level_1", "")).strip(),
+        str(row.get("NUTS_Level_2", "")).strip(),
+        str(row.get("NUTS_Level_3", "")).strip()
+    ]
+    # Remove blanks and NaNs
+    items = [x for x in items if x and pd.notna(x)]
+
+    # Remove duplicates, preserve order
+    used = []
+    for it in items:
+        if it not in used:
+            used.append(it)
+
+    return " - ".join(used)
+
 @st.cache_data(show_spinner=True)
 def load_shapefile(shp_path):
     gdf_all = gpd.read_file(shp_path)
+    
     if NUTS_LEVEL_COL not in gdf_all.columns:
         raise ValueError(tr("error_loading_shapefile", error=f"Shapefile missing '{NUTS_LEVEL_COL}' column."))
     
@@ -166,6 +188,9 @@ def load_shapefile(shp_path):
     
     if SHAPEFILE_KEY not in gdf_nuts3.columns:
         raise ValueError(tr("error_loading_shapefile", error=f"NUTS3 shapefile missing '{SHAPEFILE_KEY}' column."))
+    
+    # Create 'hover_name' column within gdf_nuts3
+    gdf_nuts3["hover_name"] = gdf_nuts3.apply(combine_nuts_names, axis=1)
     
     return gdf_nuts3
 
@@ -250,7 +275,7 @@ sex_translation_map = {
 }
 
 # Translate sex options, handling unexpected values gracefully
-translated_sexes = [sex_translation_map.get(sex, sex) for sex in sexes_available]
+translated_sexes = [sex_translation_map.get(sex, tr("sex_unknown")) for sex in sexes_available]
 
 # Create a mapping from translated label to original value
 sex_mapping = {translated: original for translated, original in zip(translated_sexes, sexes_available)}
@@ -296,30 +321,7 @@ merged_gdf = gdf_nuts3.merge(
 ###############################################################################
 # 11) Combine NUTS Level Names for Hover
 ###############################################################################
-def combine_nuts_names(row):
-    """
-    Combine NUTS_Level_1, NUTS_Level_2, NUTS_Level_3 into one string,
-    skipping duplicates.
-    """
-    items = [
-        str(row.get("NUTS_Level_1", "")).strip(),
-        str(row.get("NUTS_Level_2", "")).strip(),
-        str(row.get("NUTS_Level_3", "")).strip()
-    ]
-    # Remove blanks and NaNs
-    items = [x for x in items if x and pd.notna(x)]
-
-    # Remove duplicates, preserve order
-    used = []
-    for it in items:
-        if it not in used:
-            used.append(it)
-
-    return " - ".join(used)
-
-# Create 'hover_name' column
-merged_gdf["hover_name"] = merged_gdf.apply(combine_nuts_names, axis=1)
-
+# 'hover_name' is already created in gdf_nuts3 during load_shapefile
 # Prepare 'custom_data' for choropleth map
 merged_gdf["custom_data"] = merged_gdf.apply(lambda row: [row["hover_name"], row[VALUE_COL]], axis=1)
 
@@ -362,7 +364,6 @@ fig_map = px.choropleth_mapbox(
 )
 
 # Define hovertemplate with translated labels
-# Ensure that braces are properly escaped by doubling them
 hovertemplate_map = (
     f"{tr('region')}: %{{customdata[0]}}<br>"
     f"{tr('value_label')}: %{{customdata[1]}}<extra></extra>"
