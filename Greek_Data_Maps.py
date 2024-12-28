@@ -400,7 +400,7 @@ fig_map = px.choropleth_mapbox(
     range_color=(val_min, val_max),
     mapbox_style="carto-positron",  # fixed
     center={"lat": 39.0742, "lon": 21.8243},
-    zoom=6,
+    zoom=5.5,  # Reduced from 6 to 5.5 for a more zoomed-out view
     custom_data=["hover_name", VALUE_COL],
     labels=labels_map
 )
